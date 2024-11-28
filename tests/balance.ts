@@ -2,56 +2,52 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { Balance } from "../target/types/balance";
 
-describe("balance", () => {
+async function airdropSol(publicKey, amount) {
+  let airdropTx = await anchor.getProvider().connection.requestAirdrop(publicKey, amount);
+  await confirmTransaction(airdropTx);
+}
+
+async function confirmTransaction(tx) {
+  const latestBlockHash = await anchor.getProvider().connection.getLatestBlockhash();
+  await anchor.getProvider().connection.confirmTransaction({
+    blockhash: latestBlockHash.blockhash,
+    lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
+    signature: tx,
+  });
+}
+
+describe("Balance Other weite", () => {
+  // Configure the client to use the local cluster.
   anchor.setProvider(anchor.AnchorProvider.env());
 
   const program = anchor.workspace.Balance as Program<Balance>;
-  let pubKey = new anchor.web3.PublicKey("6uGWyDVbi5vq76AyNEazXvBnwnvTxu7mLHEW2q5MtwJe");
 
-  async function printAccountBalance(account) {
-    const balance = await anchor.getProvider().connection.getBalance(account);
-    console.log(`${account} has ${balance / anchor.web3.LAMPORTS_PER_SOL} SOL`);
-  }
+  it("Is initialized!", async () => {
+    const alice = anchor.web3.Keypair.generate();
+    const bob = anchor.web3.Keypair.generate();
 
-  it("Send sol to recipient", async () => {
+    const airdrop_alice_tx = await anchor.getProvider().connection.requestAirdrop(alice.publicKey, 1 * anchor.web3.LAMPORTS_PER_SOL);
+    await confirmTransaction(airdrop_alice_tx);
 
-    const recipient = anchor.web3.Keypair.generate();
+    const airdrop_alice_bob = await anchor.getProvider().connection.requestAirdrop(bob.publicKey, 1 * anchor.web3.LAMPORTS_PER_SOL);
+    await confirmTransaction(airdrop_alice_bob);
 
-    await printAccountBalance(recipient.publicKey);
+    let seeds = [];
+    const [myStorage, _bump] = anchor.web3.PublicKey.findProgramAddressSync(seeds, program.programId);
 
-    let amount = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
+    // ALICE INITIALIZE ACCOUNT
+    await program.methods.initialize().accounts({
+      myStorage: myStorage,
+      fren: alice.publicKey
+    }).signers([alice]).rpc();
 
-    await program.methods.sendSol(
-      amount
-    ).accounts({ recipient: recipient.publicKey }).rpc();
+    // BOB WRITE TO ACCOUNT
+    await program.methods.updateValue(new anchor.BN(23)).accounts({
+      myStorage: myStorage,
+      fren: bob.publicKey
+    }).signers([bob]).rpc();
 
-    await printAccountBalance(recipient.publicKey);
-
+    let value = await program.account.myStorage.fetch(myStorage);
+    console.log(`value stored is ${value.x}`);
   });
-
-
-  it("Send sol to multiple recipients", async () => {
-    const recipient1 = anchor.web3.Keypair.generate();
-    const recipient2 = anchor.web3.Keypair.generate();
-    const recipient3 = anchor.web3.Keypair.generate();
-
-
-    await printAccountBalance(recipient1.publicKey);
-    await printAccountBalance(recipient2.publicKey);
-    await printAccountBalance(recipient3.publicKey);
-
-    const amountMeta1 = {pubkey: recipient1.publicKey, isWritable: true, isSigner: false};
-    const amountMeta2 = {pubkey: recipient2.publicKey, isWritable: true, isSigner: false};
-    const amountMeta3 = {pubkey: recipient3.publicKey, isWritable: true, isSigner: false};
-
-    let amount = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
-
-    await program.methods.splitSol(amount).remainingAccounts([amountMeta1, amountMeta2, amountMeta3]).rpc();
-
-    await printAccountBalance(recipient1.publicKey);
-    await printAccountBalance(recipient2.publicKey);
-    await printAccountBalance(recipient3.publicKey);
-  })
-
-
 });
