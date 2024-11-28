@@ -22,32 +22,56 @@ describe("Balance Other weite", () => {
 
   const program = anchor.workspace.Balance as Program<Balance>;
 
-  it("Is initialized!", async () => {
+
+  it("Alice transfer points to Bob", async () => {
+    // 1. generate account
     const alice = anchor.web3.Keypair.generate();
     const bob = anchor.web3.Keypair.generate();
 
+    // 2. aidrop sol
     const airdrop_alice_tx = await anchor.getProvider().connection.requestAirdrop(alice.publicKey, 1 * anchor.web3.LAMPORTS_PER_SOL);
     await confirmTransaction(airdrop_alice_tx);
 
-    const airdrop_alice_bob = await anchor.getProvider().connection.requestAirdrop(bob.publicKey, 1 * anchor.web3.LAMPORTS_PER_SOL);
-    await confirmTransaction(airdrop_alice_bob);
+    const airdrop_bob_tx = await anchor.getProvider().connection.requestAirdrop(bob.publicKey, 1 * anchor.web3.LAMPORTS_PER_SOL);
+    await confirmTransaction(airdrop_bob_tx);
 
-    let seeds = [];
-    const [myStorage, _bump] = anchor.web3.PublicKey.findProgramAddressSync(seeds, program.programId);
 
-    // ALICE INITIALIZE ACCOUNT
+    // 3. generate seeds
+    let seeds_alice = [alice.publicKey.toBytes()];
+    let seeds_bob = [bob.publicKey.toBytes()];
+
+    // 4. create player
+    const [playerAlice, _bumpA] = anchor.web3.PublicKey.findProgramAddressSync(
+      seeds_alice,
+      program.programId
+    );
+
+    const [playerBob, _bumpB] = anchor.web3.PublicKey.findProgramAddressSync(
+      seeds_bob,
+      program.programId
+    );
+
+    // 5. initialize account
     await program.methods.initialize().accounts({
-      myStorage: myStorage,
-      fren: alice.publicKey
+      player: playerAlice,
+      signer: alice.publicKey,
     }).signers([alice]).rpc();
 
-    // BOB WRITE TO ACCOUNT
-    await program.methods.updateValue(new anchor.BN(23)).accounts({
-      myStorage: myStorage,
-      fren: bob.publicKey
+    await program.methods.initialize().accounts({
+      player: playerBob,
+      signer: bob.publicKey,
     }).signers([bob]).rpc();
 
-    let value = await program.account.myStorage.fetch(myStorage);
-    console.log(`value stored is ${value.x}`);
+    // 6. transfer points
+    await program.methods.transferPoints(5).accounts({
+      from: playerAlice,
+      to: playerBob,
+      signer: alice.publicKey,
+    }).signers([alice]).rpc();
+
+    console.log("Alice balance: ", (await program.account.player.fetch(playerAlice)).points);
+    console.log("Bob balance: ", (await program.account.player.fetch(playerBob)).points);
+
   });
+
 });
