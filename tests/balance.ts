@@ -1,60 +1,29 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { Balance } from "../target/types/balance";
+
+import { ChangeOwner } from "../target/types/change_owner";
+
+import privateKey from '/Users/baice/.config/solana/id.json';
 
 
-async function airdropSol(publicKey, amount) {
-  let airdropTx = await anchor.getProvider().connection.requestAirdrop(publicKey, amount * anchor.web3.LAMPORTS_PER_SOL);
-  await confirmTransaction(airdropTx);
-}
-
-async function confirmTransaction(tx) {
-  const latestBlockHash = await anchor.getProvider().connection.getLatestBlockhash();
-  await anchor.getProvider().connection.confirmTransaction({
-    blockhash: latestBlockHash.blockhash,
-    lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
-    signature: tx,
-  });
-}
-
-describe("ownership test ", () => {
+describe("change Owner test ", () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.AnchorProvider.env());
 
-  const program = anchor.workspace.Balance as Program<Balance>;
+  const program = anchor.workspace.ChangeOwner as Program<ChangeOwner>;
 
   it('initialize the pda account', async () => {
-    console.log("program address", program.programId.toBase58());
+    const deployer = anchor.web3.Keypair.fromSecretKey(Uint8Array.from(privateKey));
     const seeds = []
-    const [pda, bump_] = anchor.web3.PublicKey.findProgramAddressSync(seeds, program.programId);
+    const [myStorage, _bump] = anchor.web3.PublicKey.findProgramAddressSync(seeds, program.programId);
+    console.log("the storage account address is", myStorage.toBase58());
 
-    console.log("owner of pda before initialize:",
-      await anchor.getProvider().connection.getAccountInfo(pda));
+    await program.methods.initialize().accounts({myStorage: myStorage}).rpc();
+    await program.methods.changeOwner().accounts({myStorage: myStorage}).rpc();
 
-    await program.methods.initializePda().accounts({ pda: pda }).rpc();
-
-    console.log("owner of pda after initialize:",
-      (await anchor.getProvider().connection.getAccountInfo(pda)).owner.toBase58());
-
-    let keypair = anchor.web3.Keypair.generate();
-
-    console.log("owner of keypair before airdrop:",
-      await anchor.getProvider().connection.getAccountInfo(keypair.publicKey));
-
-    await airdropSol(keypair.publicKey, 1); // 1 SOL
-
-    console.log("owner of keypair after airdrop:",
-      (await anchor.getProvider().connection.getAccountInfo(keypair.publicKey)).owner.toBase58());
-
-    await program.methods.initializeKeypair()
-      .accounts({ keypair: keypair.publicKey })
-      .signers([keypair]) // the signer must be the keypair
-      .rpc();
-
-    console.log("owner of keypair after initialize:",
-      (await anchor.getProvider().connection.getAccountInfo(keypair.publicKey)).owner.toBase58());
-
-
-  })
+    // after the ownership has been transferred
+    // the account can still be initialized again
+    await program.methods.initialize().accounts({myStorage: myStorage}).rpc();
+  });
 
 });
