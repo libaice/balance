@@ -6,47 +6,34 @@ declare_id!("vixF6x1vJt5X3BhFCtUiWxrTpJhmRsvFaJWyqKU1Hmh");
 pub mod balance {
     use super::*;
 
-    pub fn initialize_pda(ctx: Context<InitializePDA>) -> Result<()> {
+    pub fn initialize_keypair(ctx: Context<InitializeKeypair>) -> Result<()> {
         Ok(())
     }
 
-    pub fn initialize_keypair_account(ctx: Context<InitializeKeypairAccount>) -> Result<()> {
+    pub fn initialize_pda(ctx: Context<InitializePda>) -> Result<()> {
         Ok(())
     }
 }
+#[derive(Accounts)]
+pub struct InitializeKeypair<'info> {
+    #[account(init, payer = signer, space = 8)]
+    keypair: Account<'info, Keypair>,
+    #[account(mut)]
+    signer: Signer<'info>,
+    system_program: Program<'info, System>,
+}
 
 #[derive(Accounts)]
-pub struct InitializeKeypairAccount<'info> {
-    // This is the program derived address
-    #[account(init,
-              payer = signer,
-              space = size_of::<MyKeypairAccount>() + 8,)]
-    pub my_keypair_account: Account<'info, MyKeypairAccount>,
-
+pub struct InitializePda<'info> {
+    #[account(init, payer = signer, space = 8, seeds = [], bump)]
+    pda: Account<'info, Pda>,
     #[account(mut)]
-    pub signer: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
+    signer: Signer<'info>,
+    system_program: Program<'info, System>,
 }
 
 #[account]
-pub struct MyKeypairAccount {
-    x: u64,
-}
-
-//
-#[derive(Accounts)]
-pub struct InitializePDA<'info> {
-    #[account(init, payer = signer, space = size_of::<MyPDA>() + 8, seeds = [], bump)]
-    pub my_pda: Account<'info, MyPDA>,
-
-    #[account(mut)]
-    pub signer: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
-}
+pub struct Keypair();
 
 #[account]
-pub struct MyPDA {
-    x: u64,
-}
+pub struct Pda();

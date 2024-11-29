@@ -17,58 +17,42 @@ async function confirmTransaction(tx) {
   });
 }
 
-describe("Balance Other weite", () => {
+describe("ownership test ", () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.AnchorProvider.env());
 
   const program = anchor.workspace.Balance as Program<Balance>;
 
   it('initialize the pda account', async () => {
-    const seeds = [];
-    // const [myPda, _bump] = anchor.web3.PublicKey.findProgramAddressSync(seeds, program.programId);
-    // console.log("the storage account address is ", myPda.toBase58());
+    console.log("program address", program.programId.toBase58());
+    const seeds = []
+    const [pda, bump_] = anchor.web3.PublicKey.findProgramAddressSync(seeds, program.programId);
 
-    // const tx = await program.methods.initializePda().accounts({ myPda: myPda }).rpc();
+    console.log("owner of pda before initialize:",
+      await anchor.getProvider().connection.getAccountInfo(pda));
 
-    // console.log('tx', tx);
+    await program.methods.initializePda().accounts({ pda: pda }).rpc();
 
-    // --------------------------------
+    console.log("owner of pda after initialize:",
+      (await anchor.getProvider().connection.getAccountInfo(pda)).owner.toBase58());
 
-    const newKeyPair = anchor.web3.Keypair.generate();
-    const receiverWallet = anchor.web3.Keypair.generate();
+    let keypair = anchor.web3.Keypair.generate();
 
-    await airdropSol(newKeyPair.publicKey, 1);
+    console.log("owner of keypair before airdrop:",
+      await anchor.getProvider().connection.getAccountInfo(keypair.publicKey));
 
+    await airdropSol(keypair.publicKey, 1); // 1 SOL
 
-    console.log("the new keypair is ", newKeyPair.publicKey.toBase58());
+    console.log("owner of keypair after airdrop:",
+      (await anchor.getProvider().connection.getAccountInfo(keypair.publicKey)).owner.toBase58());
 
-    const transferTx = new anchor.web3.Transaction().add(
-      anchor.web3.SystemProgram.transfer({
-        fromPubkey: newKeyPair.publicKey,
-        toPubkey: receiverWallet.publicKey,
-        lamports: anchor.web3.LAMPORTS_PER_SOL,
-      })
-    );
-
-    await anchor.web3.sendAndConfirmTransaction(
-      anchor.getProvider().connection, transferTx, [newKeyPair]
-    )
-
-    await program.methods.initializeKeypairAccount()
-      .accounts({ myKeypairAccount: newKeyPair.publicKey })
-      .signers([newKeyPair]) // the signer must be the keypair
+    await program.methods.initializeKeypair()
+      .accounts({ keypair: keypair.publicKey })
+      .signers([keypair]) // the signer must be the keypair
       .rpc();
 
-    console.log("initialized");
-    // try to transfer again, this fails
-    const transaction = new anchor.web3.Transaction().add(
-      anchor.web3.SystemProgram.transfer({
-        fromPubkey: newKeyPair.publicKey,
-        toPubkey: receiverWallet.publicKey,
-        lamports: 1 * anchor.web3.LAMPORTS_PER_SOL,
-      }),
-    );
-    await anchor.web3.sendAndConfirmTransaction(anchor.getProvider().connection, transaction, [newKeyPair]);
+    console.log("owner of keypair after initialize:",
+      (await anchor.getProvider().connection.getAccountInfo(keypair.publicKey)).owner.toBase58());
 
 
   })
