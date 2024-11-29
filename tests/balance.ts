@@ -2,8 +2,9 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { Balance } from "../target/types/balance";
 
+
 async function airdropSol(publicKey, amount) {
-  let airdropTx = await anchor.getProvider().connection.requestAirdrop(publicKey, amount);
+  let airdropTx = await anchor.getProvider().connection.requestAirdrop(publicKey, amount * anchor.web3.LAMPORTS_PER_SOL);
   await confirmTransaction(airdropTx);
 }
 
@@ -22,56 +23,54 @@ describe("Balance Other weite", () => {
 
   const program = anchor.workspace.Balance as Program<Balance>;
 
+  it('initialize the pda account', async () => {
+    const seeds = [];
+    // const [myPda, _bump] = anchor.web3.PublicKey.findProgramAddressSync(seeds, program.programId);
+    // console.log("the storage account address is ", myPda.toBase58());
 
-  it("Alice transfer points to Bob", async () => {
-    // 1. generate account
-    const alice = anchor.web3.Keypair.generate();
-    const bob = anchor.web3.Keypair.generate();
+    // const tx = await program.methods.initializePda().accounts({ myPda: myPda }).rpc();
 
-    // 2. aidrop sol
-    const airdrop_alice_tx = await anchor.getProvider().connection.requestAirdrop(alice.publicKey, 1 * anchor.web3.LAMPORTS_PER_SOL);
-    await confirmTransaction(airdrop_alice_tx);
+    // console.log('tx', tx);
 
-    const airdrop_bob_tx = await anchor.getProvider().connection.requestAirdrop(bob.publicKey, 1 * anchor.web3.LAMPORTS_PER_SOL);
-    await confirmTransaction(airdrop_bob_tx);
+    // --------------------------------
+
+    const newKeyPair = anchor.web3.Keypair.generate();
+    const receiverWallet = anchor.web3.Keypair.generate();
+
+    await airdropSol(newKeyPair.publicKey, 1);
 
 
-    // 3. generate seeds
-    let seeds_alice = [alice.publicKey.toBytes()];
-    let seeds_bob = [bob.publicKey.toBytes()];
+    console.log("the new keypair is ", newKeyPair.publicKey.toBase58());
 
-    // 4. create player
-    const [playerAlice, _bumpA] = anchor.web3.PublicKey.findProgramAddressSync(
-      seeds_alice,
-      program.programId
+    const transferTx = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: newKeyPair.publicKey,
+        toPubkey: receiverWallet.publicKey,
+        lamports: anchor.web3.LAMPORTS_PER_SOL,
+      })
     );
 
-    const [playerBob, _bumpB] = anchor.web3.PublicKey.findProgramAddressSync(
-      seeds_bob,
-      program.programId
+    await anchor.web3.sendAndConfirmTransaction(
+      anchor.getProvider().connection, transferTx, [newKeyPair]
+    )
+
+    await program.methods.initializeKeypairAccount()
+      .accounts({ myKeypairAccount: newKeyPair.publicKey })
+      .signers([newKeyPair]) // the signer must be the keypair
+      .rpc();
+
+    console.log("initialized");
+    // try to transfer again, this fails
+    const transaction = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: newKeyPair.publicKey,
+        toPubkey: receiverWallet.publicKey,
+        lamports: 1 * anchor.web3.LAMPORTS_PER_SOL,
+      }),
     );
+    await anchor.web3.sendAndConfirmTransaction(anchor.getProvider().connection, transaction, [newKeyPair]);
 
-    // 5. initialize account
-    await program.methods.initialize().accounts({
-      player: playerAlice,
-      signer: alice.publicKey,
-    }).signers([alice]).rpc();
 
-    await program.methods.initialize().accounts({
-      player: playerBob,
-      signer: bob.publicKey,
-    }).signers([bob]).rpc();
-
-    // 6. transfer points
-    await program.methods.transferPoints(5).accounts({
-      from: playerAlice,
-      to: playerBob,
-      signer: alice.publicKey,
-    }).signers([alice]).rpc();
-
-    console.log("Alice balance: ", (await program.account.player.fetch(playerAlice)).points);
-    console.log("Bob balance: ", (await program.account.player.fetch(playerBob)).points);
-
-  });
+  })
 
 });
